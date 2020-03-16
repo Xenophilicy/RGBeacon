@@ -34,7 +34,7 @@ use Xenophilicy\RGBeacon\tile\Beacon as BeaconTile;
 class RGBeacon extends PluginBase implements Listener{
 
     protected static $inventories = [];
-    private $levels = [];
+
     private static $colors = [
         0 => "white",
         1 => "orange",
@@ -53,6 +53,7 @@ class RGBeacon extends PluginBase implements Listener{
         14 => "red",
         15 => "black"
     ];
+
     private static $usages = [
         "remove" => "/beacon remove <id>",
         "pause" => "/beacon pause <id>",
@@ -62,6 +63,8 @@ class RGBeacon extends PluginBase implements Listener{
         "set" => "/beacon set <id> <setting> <delay-ticks|color-list>",
         "list" => "/beacon list <world|all>"
     ];
+
+    private $levels = [];
 
     // Big thanks to jasonwynn10's PM-Beacons for a start on beacon implementation
 

@@ -72,7 +72,6 @@ class Beacon extends Block {
 		/** @var BeaconTile $beacon */
 		$beacon = BeaconTile::createTile(BeaconTile::BEACON, $this->getLevel(), BeaconTile::createNBT($this, $face, $item, $player));
 		if($beacon->getLayers() > 3) {
-			Achievement::broadcast($player, "create_full_beacon");
 		}
 		return parent::place($item, $blockReplace, $blockClicked, $face, $clickVector, $player);
 	}
