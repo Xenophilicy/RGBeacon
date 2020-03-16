@@ -1,0 +1,114 @@
+# MADE BY:
+#  __    __                                          __        __  __  __                     
+# /  |  /  |                                        /  |      /  |/  |/  |                    
+# $$ |  $$ |  ______   _______    ______    ______  $$ |____  $$/ $$ |$$/   _______  __    __ 
+# $$  \/$$/  /      \ /       \  /      \  /      \ $$      \ /  |$$ |/  | /       |/  |  /  |
+#  $$  $$<  /$$$$$$  |$$$$$$$  |/$$$$$$  |/$$$$$$  |$$$$$$$  |$$ |$$ |$$ |/$$$$$$$/ $$ |  $$ |
+#   $$$$  \ $$    $$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |$$ |$$ |$$ |$$ |      $$ |  $$ |
+#  $$ /$$  |$$$$$$$$/ $$ |  $$ |$$ \__$$ |$$ |__$$ |$$ |  $$ |$$ |$$ |$$ |$$ \_____ $$ \__$$ |
+# $$ |  $$ |$$       |$$ |  $$ |$$    $$/ $$    $$/ $$ |  $$ |$$ |$$ |$$ |$$       |$$    $$ |
+# $$/   $$/  $$$$$$$/ $$/   $$/  $$$$$$/  $$$$$$$/  $$/   $$/ $$/ $$/ $$/  $$$$$$$/  $$$$$$$ |
+#                                         $$ |                                      /  \__$$ |
+#                                         $$ |                                      $$    $$/ 
+#                                         $$/                                        $$$$$$/
+VERSION: "1.0.0" # Internal use only
+
+# These are the settings that determine which worlds beacons can be created in
+Worlds:
+
+  # This is the list of worlds which worlds to include/exclude RGBeacon creation
+  List:
+    - "Lobby"
+    - "Spawn"
+  
+  # Choose the mode for the world list, options are blacklist, whitelist, or false
+  # Set this to false to enable RGBeacons in all worlds
+  Mode: false
+
+# Choose whether to set the beacon's color with a stained glass block or a stained glass pane
+# Options are block or pane
+Color-Type: "block"
+
+# Set the beacon refresh task delay in ticks
+# This is to fix beacon beam updating when chunks unload and are loaded again
+# Plugin default is 300 ticks (15 seconds)
+# Set this to false if you don't want the beacon to update cyclically
+Beacon-Refresh-Delay: 300
+
+# These are the beacon defaults that are used when creating a beacon
+Defaults:
+
+  # Set the default beacon color duration
+  # Beacon beams update every 80 ticks (4 seconds)
+  # Plugin default is 80
+  Delay: 80
+
+  # Set the default beacon colors
+  # Available olors: white, red, orange, pink, yellow, lime, green, light blue, cyan, blue, magenta, purple, brown, gray, light gray, black
+  # Plugin default is white
+  Colors:
+    - white
+
+# This is where beacon data is stored
+# Any number of colors can be added to a beacon
+# Refrain from directly editing this for the sake of creating loads of errors
+
+Beacons: []
+
+# Key:
+# ID → Beacon's world ID set by the plugin when executing `/beacon new`
+# Level → World the beacon is placed on
+# Coords → XYZ coordinates of the beacon's loaction in the world
+# Delay → How many ticks between color changes; 1 second = 20 ticks
+# Replaced → This is the ID of the two blocks the beacon replaced, needed for removal
+# Base → All 9 blocks occupied by the base of the beacon, needed for removal
+# Colors → List of colors the beacon should change to
+
+# Beacon format is as follows:
+# ID:
+#   Level: "Name"
+#   Coords: [x,y,z]
+#   Delay: ticks
+#   Replaced:
+#     Glass: "ID:Meta"
+#     Beacon: "ID:Meta"
+#   Base: [
+#     "ID:Meta",
+#     "ID:Meta",
+#     "ID:Meta",
+#     "ID:Meta",
+#     "ID:Meta",
+#     "ID:Meta",
+#     "ID:Meta",
+#     "ID:Meta",
+#     "ID:Meta",
+#   ]
+#   Colors:
+#     - Color-Name
+
+# Example beacon:
+# 2:
+#   Level: "Lobby"
+#   Coords:
+#   - 249
+#   - 2.0
+#   - 257
+#   Delay: 20
+#   Replaced:
+#     Glass: "2:0"
+#     Beacon: "3:0"
+#   Base:
+#   - "3:0"
+#   - "3:0"
+#   - "3:0"
+#   - "3:0"
+#   - "3:0"
+#   - "3:0"
+#   - "3:0"
+#   - "3:0"
+#   - "3:0"
+#   Colors:
+#   - blue
+#   - green
+#   - red
+#   - orange

@@ -1,0 +1,47 @@
+name: RGBeacon
+author: Xenophilicy
+version: 1.0.0
+main: Xenophilicy\RGBeacon\RGBeacon
+api: 3.0.0
+description: Spawn multicolored beacons in your worlds!
+commands:
+  rgbeacon:
+    description: Get info on RGBeacon
+    permission: rgbeacon.info
+  beacon:
+    description: Create, remove, and manage RGBeacons
+permissions:
+  rgbeacon.info:
+    description: Get info on the plugin
+    default: op
+  rgbeacon.command:
+    description: Allow access to all RGBeacon commands
+    default: op
+    children:
+      rgbeacon.command.new:
+        description: Create new beacons
+        default: op
+      rgbeacon.command.remove:
+        description: Remove beacons
+        default: op
+      rgbeacon.command.pause:
+        description: Pause active beacons
+        default: op
+      rgbeacon.command.resume:
+        description: Resume paused beacons
+        default: op
+      rgbeacon.command.hide:
+        description: Hide visible beacons
+        default: op
+      rgbeacon.command.show:
+        description: Show disabled beacons
+        default: op
+      rgbeacon.command.set:
+        description: Set values on beacons
+        default: op
+      rgbeacon.command.reload:
+        description: Reload beacons config
+        default: op
+      rgbeacon.command.list:
+        description: List all beacons
+        default: op
