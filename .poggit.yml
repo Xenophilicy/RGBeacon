@@ -1,6 +1,0 @@
---- # Poggit-CI Manifest. Open my sexy CI at https://poggit.pmmp.io/ci/Xenophilicy/RGBeacon
-build-by-default: true
-branches:
-- master
-projects: []
-...
