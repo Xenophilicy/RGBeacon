@@ -8,6 +8,8 @@
 ## Information
 This plugin allows you to spawn in beacons that change colors according to what you throw in the plugin's config! You are able to change the color of the beacon, order of colors, and speed of the colors in the *config.yml* file! To spawn a new RGBeacon, simple execute the command `/beacon new` and the plugin will spawn a new beacon under your feet! Beacons can be removed with their corresponding ID that can be found when both creating the beacon and looking at the beacon list in the config file!
 
+### [Click here to download RGBeacon from Poggit](https://poggit.pmmp.io/p/RGBeacon/)
+
 *You can find a video example on YouTube → https://www.youtube.com/watch?v=i5C-QT9w4W0*
 
 [![Xenophilicy](https://img.youtube.com/vi/i5C-QT9w4W0/0.jpg)](https://www.youtube.com/watch?v=i5C-QT9w4W0)
@@ -57,7 +59,7 @@ The beacon beams will not be activated when chunks are unloaded and then reloade
 ***
 
 ## Dependencies
-**DevTools → https://github.com/pmmp/PocketMine-DevTools** *(If you are using the plugin folder method)*
+**DevTools → https://github.com/pmmp/PocketMine-DevTools** *(If you're running the plugin from source)*
 
 ## Credits
 * [Xenophilicy](https://github.com/Xenophilicy/)
