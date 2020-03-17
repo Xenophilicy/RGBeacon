@@ -25,7 +25,7 @@ use pocketmine\network\mcpe\protocol\PacketPool;
 use pocketmine\Player;
 use pocketmine\tile\Tile;
 
-use Xenophilicy\RGBeacon\Task\{LoopTaskCaller,UpdateBeaconTask};
+use Xenophilicy\RGBeacon\task\{LoopTaskCaller,UpdateBeaconTask};
 use Xenophilicy\RGBeacon\block\Beacon;
 use Xenophilicy\RGBeacon\inventory\BeaconInventory;
 use Xenophilicy\RGBeacon\packet\InventoryTransactionPacketV2;
