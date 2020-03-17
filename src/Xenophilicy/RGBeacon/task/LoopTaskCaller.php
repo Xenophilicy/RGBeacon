@@ -13,7 +13,7 @@
 #                                         $$ |                                      $$    $$/ 
 #                                         $$/                                        $$$$$$/
 
-namespace Xenophilicy\RGBeacon\Task;
+namespace Xenophilicy\RGBeacon\task;
 
 use pocketmine\scheduler\Task;
 
