@@ -10,7 +10,6 @@ namespace Xenophilicy\RGBeacon\block;
 
 use Xenophilicy\RGBeacon\RGBeacon as Beacons;
 use Xenophilicy\RGBeacon\tile\Beacon as BeaconTile;
-use pocketmine\Achievement;
 use pocketmine\block\Block;
 use pocketmine\block\BlockToolType;
 use pocketmine\item\Item;
