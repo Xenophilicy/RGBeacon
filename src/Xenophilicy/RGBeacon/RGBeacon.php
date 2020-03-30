@@ -66,24 +66,10 @@ class RGBeacon extends PluginBase implements Listener{
 
     private $levels = [];
 
-    // Big thanks to jasonwynn10's PM-Beacons for a start on beacon implementation
-
     public function onLoad() {
-		PacketPool::registerPacket(new InventoryTransactionPacketV2());
-        Tile::registerTile(BeaconTile::class, [BeaconTile::BEACON, "minecraft:beacon"]);
-		BlockFactory::registerBlock(new Beacon(), true);
-		Item::addCreativeItem(new ItemBlock(Block::BEACON));
         $this->saveDefaultConfig();
         $this->config = new Config($this->getDataFolder()."config.yml", Config::YAML);
         $this->config->getAll();
-    }
-
-    public static function getBeaconInventory(Player $player) : ?BeaconInventory {
-		return self::$inventories[$player->getName()] ?? null;
-	}
-
-	public static function setBeaconInventory(Player $player, BeaconTile $beacon) {
-		self::$inventories[$player->getName()] = $beacon->getInventory();
     }
     
     public static function getGlassMeta(string $name){
