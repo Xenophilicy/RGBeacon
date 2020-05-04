@@ -460,7 +460,7 @@ class RGBeacon extends PluginBase implements Listener {
         $y = $player->getY();
         $z = $player->getZ();
         $level = $player->getLevel();
-        if(!in_array($level->getName(), $this->levels)){
+        if(($this->listMode == "wl" && !in_array($level, $this->levels)) || ($this->listMode == "bl" && in_array($level, $this->levels))){
             $player->sendMessage(TF::RED . "Beacons cannot be created on level " . $level->getName());
             return;
         }
