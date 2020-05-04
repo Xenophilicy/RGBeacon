@@ -14,6 +14,8 @@
 #                                         $$/                                        $$$$$$/
 namespace Xenophilicy\RGBeacon;
 
+use Exception;
+use InvalidArgumentException;
 use pocketmine\block\{Block, BlockFactory};
 use pocketmine\command\{Command, CommandSender};
 use pocketmine\event\Listener;
@@ -30,22 +32,29 @@ use Xenophilicy\RGBeacon\task\{LoopTaskCaller, UpdateBeaconTask};
  */
 class RGBeacon extends PluginBase implements Listener {
     
-    protected static $inventories = [];
-    
     private static $colors = [0 => "white", 1 => "orange", 2 => "magenta", 3 => "light blue", 4 => "yellow", 5 => "lime", 6 => "pink", 7 => "gray", 8 => "light gray", 9 => "cyan", 10 => "purple", 11 => "blue", 12 => "brown", 13 => "green", 14 => "red", 15 => "black"];
     
     private static $usages = ["remove" => "/beacon remove <id>", "pause" => "/beacon pause <id>", "resume" => "/beacon resume <id>", "hide" => "/beacon hide <id>", "show" => "/beacon show <id>", "set" => "/beacon set <id> <setting> <delay-ticks|color-list>", "list" => "/beacon list <world|all>"];
-    
+    /**
+     * @var
+     */
+    public $internalData;
+    /**
+     * @var
+     */
+    public $colorType;
+    /**
+     * @var
+     */
+    public $validBeacons;
     private $levels = [];
     private $pluginVersion;
-    public $internalData;
-    public $colorType;
-    public $validBeacons;
     private $defaults;
     /**
      * @var array
      */
     private $beaconList;
+    private $listMode;
     
     /**
      * @param string $name
@@ -66,33 +75,32 @@ class RGBeacon extends PluginBase implements Listener {
             $this->getLogger()->warning("You have updated RGBeacon to v" . $this->pluginVersion . " but have a config from v$version! Please delete your old config for new features to be enabled and to prevent unwanted errors! Plugin will remain disabled...");
             $this->getServer()->getPluginManager()->disablePlugin($this);
         }
-        $loadLevels = [];
-        foreach(scandir($this->getServer()->getDataPath() . "worlds/") as $level){
-            if($level === "." || $level === ".."){
-                continue;
-            }else{
-                array_push($loadLevels, $level);
-                $this->getServer()->loadLevel($level);
-            }
+        $mode = strtolower($this->config->getNested("Worlds.Mode"));
+        switch($mode){
+            case "whitelist":
+                $this->listMode = "wl";
+                break;
+            case "blacklist":
+                $this->listMode = "bl";
+                break;
+            case "false":
+            case false:
+                $this->listMode = false;
+                break;
+            default:
+                $this->getLogger()->error("Invalid world list mode! Valid modes are 'blacklist', 'whitelist', or false. Invalid mode: " . $mode . " is not supported!, disabling plugin...");
+                $this->getServer()->getPluginManager()->disablePlugin($this);
+                return;
         }
-        if(($listMode = $this->config->getNested("Worlds.Mode")) === false){
-            foreach($loadLevels as $level){
-                $level = $this->getServer()->getLevelByName($level);
-                array_push($this->levels, $level->getName());
-            }
-        }else{
+        if($this->listMode !== false){
             $worldList = $this->config->getNested("Worlds.List");
             foreach($worldList as $world){
-                if($this->getServer()->getLevelByName($world) === null){
+                if(!$this->getServer()->isLevelGenerated($world)){
                     $this->getLogger()->critical("Invalid world name! Name: " . $world . " was not found, disabling plugin! Be sure you use the name of the world folder for the world name in the config!");
                     $this->getServer()->getPluginManager()->disablePlugin($this);
                     return;
-                }
-            }
-            foreach($loadLevels as $level){
-                $level = $this->getServer()->getLevelByName($level);
-                if(($listMode === "whitelist" && in_array($level->getName(), $worldList)) || ($listMode === "blacklist" && !in_array($level->getName(), $worldList))){
-                    array_push($this->levels, $level->getName());
+                }else{
+                    array_push($this->levels, $world);
                 }
             }
         }
@@ -138,19 +146,6 @@ class RGBeacon extends PluginBase implements Listener {
         }
     }
     
-    private static function checkColor(string $name): bool{
-        foreach(array_values(self::$colors) as $color){
-            if($name === $color){
-                return true;
-            }
-        }
-        return false;
-    }
-    
-    /**
-     * @param $defaults
-     * @return bool
-     */
     /**
      * @param $defaults
      * @return bool
@@ -176,9 +171,18 @@ class RGBeacon extends PluginBase implements Listener {
     }
     
     /**
-     * @param $beacons
-     * @return array
+     * @param string $name
+     * @return bool
      */
+    private static function checkColor(string $name): bool{
+        foreach(array_values(self::$colors) as $color){
+            if($name === $color){
+                return true;
+            }
+        }
+        return false;
+    }
+    
     /**
      * @param $beacons
      * @return array
@@ -196,7 +200,7 @@ class RGBeacon extends PluginBase implements Listener {
                 continue;
             }
             $level = $this->getServer()->getLevelByName($data["Level"])->getName();
-            if(!in_array($level, $this->levels)){
+            if(($this->listMode == "wl" && !in_array($level, $this->levels)) || ($this->listMode == "bl" && in_array($level, $this->levels))){
                 $this->getLogger()->warning("Beacon ID " . $id . " cannot be started on level " . $level . " due to whitelist/blacklist, it will be removed from the config!");
                 continue;
             }
@@ -219,7 +223,7 @@ class RGBeacon extends PluginBase implements Listener {
                 $values = explode(":", $block);
                 try{
                     Block::get((int)$values[0], isset($values[1]) ? (int)$values[1] : 0);
-                }catch(\InvalidArgumentException $e){
+                }catch(InvalidArgumentException $e){
                     $this->getLogger()->warning("Invalid block found on beacon ID " . $id . " as " . $block . ", it will be disabled!");
                     continue 2;
                 }
@@ -228,7 +232,7 @@ class RGBeacon extends PluginBase implements Listener {
                 $values = explode(":", $block);
                 try{
                     Block::get((int)$values[0], isset($values[1]) ? (int)$values[1] : 0);
-                }catch(\InvalidArgumentException $e){
+                }catch(InvalidArgumentException $e){
                     $this->getLogger()->warning("Invalid base block found on beacon ID " . $id . " as " . $block . ", it will be disabled!");
                     continue 2;
                 }
@@ -252,10 +256,6 @@ class RGBeacon extends PluginBase implements Listener {
      * @param $beacons
      * @return int|null
      */
-    /**
-     * @param $beacons
-     * @return int|null
-     */
     private function startAllBeacons($beacons): ?int{
         $started = 0;
         try{
@@ -264,7 +264,7 @@ class RGBeacon extends PluginBase implements Listener {
                 $started++;
             }
             return $started;
-        }catch(\Exception | \ErrorException $e){
+        }catch(Exception $e){
             return null;
         }
     }
@@ -293,394 +293,8 @@ class RGBeacon extends PluginBase implements Listener {
         return;
     }
     
-    private function createBeacon(Player $player): void{
-        $x = $player->getX();
-        $y = $player->getY();
-        $z = $player->getZ();
-        $level = $player->getLevel();
-        if(!in_array($level->getName(), $this->levels)){
-            $player->sendMessage(TF::RED . "Beacons cannot be created on level " . $level->getName());
-            return;
-        }
-        foreach($this->validBeacons as $id => $data){
-            if($level->getName() == $data["Level"]){
-                $coords = $data["Coords"];
-                $dBlock = $level->getBlockAt($x, $y, $z);
-                $eBlock = $level->getBlockAt($coords[0], $coords[1], $coords[2]);
-                if($dBlock->x == $eBlock->x && $dBlock->y == $eBlock->y && $dBlock->z == $eBlock->z){
-                    $player->sendMessage(TF::RED . "Beacon (ID " . $id . ") already exists at (" . (int)$x . ", " . (int)$y . ", " . (int)$z . ")");
-                    return;
-                }
-            }
-        }
-        $tBlock = $level->getBlockAt($x, $y - 1, $z);
-        $bBlock = $level->getBlockAt($x, $y - 2, $z);
-        $id = sizeof($this->validBeacons) === 0 ? 1 : max(array_keys($this->validBeacons)) + 1;
-        while(array_key_exists($id, $this->validBeacons)){
-            $id++;
-        }
-        $pos = $bBlock->getSide(0);
-        $baseBlocks = [];
-        for($blockX = $pos->x - 1; $blockX <= $pos->x + 1; $blockX++){
-            for($blockZ = $pos->z - 1; $blockZ <= $pos->z + 1; $blockZ++){
-                $baseBlock = $level->getBlockAt($blockX, $pos->y, $blockZ);
-                $level->setBlock($baseBlock, BlockFactory::get(Block::IRON_BLOCK), true, false);
-                array_push($baseBlocks, $baseBlock->getId() . ":" . $baseBlock->getDamage());
-            }
-        }
-        $data = ["Level" => $level->getName(), "Coords" => [$x, $y, $z], "Delay" => $this->defaults["delay"], "Replaced" => ["Glass" => $tBlock->getId() . ":" . $tBlock->getDamage(), "Beacon" => $bBlock->getId() . ":" . $bBlock->getDamage()], "Base" => $baseBlocks, "Colors" => $this->defaults["colors"]];
-        if($this->colorType === "block"){
-            $level->setBlock($tBlock, BlockFactory::get(Block::STAINED_GLASS), true, true);
-        }else{
-            $level->setBlock($tBlock, BlockFactory::get(Block::STAINED_GLASS_PANE), true, true);
-        }
-        $this->startBeacon($id, $data);
-        $player->sendMessage(TF::GREEN . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::GREEN . "created at " . TF::YELLOW . "(" . (int)$x . ", " . (int)$y . ", " . (int)$z . ")");
-        return;
-    }
-    
-    private function removeBeacon(CommandSender $sender, int $id): void{
-        if(in_array($id, array_keys($this->beaconList))){
-            if(in_array($id, array_keys($this->validBeacons))){
-                foreach($this->internalData[$id]["TaskIDs"] as $taskID){
-                    $this->internalData[$id]["TaskIDs"] = [];
-                    $this->getScheduler()->cancelTask($taskID);
-                }
-                $data = $this->validBeacons[$id];
-                unset($this->validBeacons[$id]);
-                unset($this->beaconList[$id]);
-                $level = $this->getServer()->getLevelByName($data["Level"]);
-                $coords = $data["Coords"];
-                $tBlock = $level->getBlockAt($coords[0], $coords[1] - 1, $coords[2]);
-                $bBlock = $level->getBlockAt($coords[0], $coords[1] - 2, $coords[2]);
-                $values = explode(":", $data["Replaced"]["Glass"]);
-                $level->setBlock($tBlock, BlockFactory::get((int)$values[0], isset($values[1]) ? (int)$values[1] : 0));
-                $values = explode(":", $data["Replaced"]["Beacon"]);
-                $level->setBlock($bBlock, BlockFactory::get((int)$values[0], isset($values[1]) ? (int)$values[1] : 0));
-                $pos = $bBlock->getSide(0);
-                $i = 0;
-                for($blockX = $pos->x - 1; $blockX <= $pos->x + 1; $blockX++){
-                    for($blockZ = $pos->z - 1; $blockZ <= $pos->z + 1; $blockZ++){
-                        $replacement = $data["Base"][$i];
-                        $i++;
-                        $baseBlock = $level->getBlockAt($blockX, $pos->y, $blockZ);
-                        $values = explode(":", $replacement);
-                        $level->setBlock($baseBlock, Block::get((int)$values[0], isset($values[1]) ? (int)$values[1] : 0));
-                    }
-                }
-                $this->config->removeNested("Beacons." . $id);
-                $this->config->save();
-                $sender->sendMessage(TF::GREEN . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::GREEN . "removed successfully");
-                return;
-            }else{
-                $sender->sendMessage(TF::RED . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::RED . "is invalid and cannot be removed");
-            }
-        }else{
-            $sender->sendMessage(TF::RED . "The beacon specified doesn't exist");
-            return;
-        }
-    }
-    
-    private function pauseBeacon(CommandSender $sender, int $id): void{
-        if(in_array($id, array_keys($this->beaconList))){
-            if(in_array($id, array_keys($this->validBeacons))){
-                if($this->internalData[$id]["Paused"] === false){
-                    $this->internalData[$id]["Paused"] = true;
-                    foreach($this->internalData[$id]["TaskIDs"] as $taskID){
-                        $this->internalData[$id]["TaskIDs"] = [];
-                        $this->getScheduler()->cancelTask($taskID);
-                    }
-                    $sender->sendMessage(TF::GREEN . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::GREEN . "paused successfully");
-                }else{
-                    $sender->sendMessage(TF::YELLOW . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::YELLOW . "is already paused");
-                }
-            }else{
-                $sender->sendMessage(TF::RED . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::RED . "exists but is not enabled");
-            }
-        }else{
-            $sender->sendMessage(TF::RED . "The beacon specified doesn't exist");
-        }
-        return;
-    }
-    
-    private function resumeBeacon(CommandSender $sender, int $id): void{
-        if(in_array($id, array_keys($this->beaconList))){
-            if(in_array($id, array_keys($this->validBeacons))){
-                if($this->internalData[$id]["Paused"] === true){
-                    $this->internalData[$id]["Paused"] = false;
-                    if($this->internalData[$id]["Activated"] === false){
-                        $sender->sendMessage(TF::YELLOW . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::YELLOW . " was re-activated because it was deactivatd before resuming");
-                    }
-                    $this->startBeacon($id, $this->validBeacons[$id]);
-                    $sender->sendMessage(TF::GREEN . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::GREEN . "resumed successfully");
-                }else{
-                    $sender->sendMessage(TF::YELLOW . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::YELLOW . "is not currently paused");
-                }
-            }else{
-                $sender->sendMessage(TF::RED . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::RED . "exists but is not enabled");
-            }
-        }else{
-            $sender->sendMessage(TF::RED . "The beacon specified doesn't exist");
-        }
-        return;
-    }
-    
-    public function hideBeacon(int $id, CommandSender $sender = null): void{
-        if(in_array($id, array_keys($this->beaconList))){
-            if(in_array($id, array_keys($this->validBeacons))){
-                if($this->internalData[$id]["Activated"] === true){
-                    $this->internalData[$id]["Activated"] = false;
-                    $data = $this->validBeacons[$id];
-                    $coords = $data["Coords"];
-                    $level = $this->getServer()->getLevelByName($data["Level"]);
-                    $block = $level->getBlockAt($coords[0], $coords[1] - 2, $coords[2]);
-                    $level->setBlock($block, BlockFactory::get(Block::IRON_BLOCK), true, true);
-                    if($sender === null){
-                        return;
-                    }
-                    $sender->sendMessage(TF::GREEN . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::GREEN . "deactivated successfully");
-                }elseif($sender !== null){
-                    $sender->sendMessage(TF::YELLOW . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::YELLOW . "is already deactivated");
-                }
-            }elseif($sender !== null){
-                $sender->sendMessage(TF::RED . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::RED . "exists but is not enabled");
-            }
-        }elseif($sender !== null){
-            $sender->sendMessage(TF::RED . "The beacon specified doesn't exist");
-        }
-        return;
-    }
-    
-    public function showBeacon(int $id, CommandSender $sender = null): void{
-        if(in_array($id, array_keys($this->beaconList))){
-            if(in_array($id, array_keys($this->validBeacons))){
-                if($this->internalData[$id]["Activated"] === false){
-                    $this->internalData[$id]["Activated"] = true;
-                    $data = $this->validBeacons[$id];
-                    $coords = $data["Coords"];
-                    $level = $this->getServer()->getLevelByName($data["Level"]);
-                    $level->loadChunk($coords[0], $coords[2]);
-                    $block = $level->getBlockAt($coords[0], $coords[1] - 2, $coords[2]);
-                    $level->setBlock($block, BlockFactory::get(Block::BEACON), true, true);
-                    if($sender === null){
-                        return;
-                    }
-                    $sender->sendMessage(TF::GREEN . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::GREEN . "activated successfully");
-                }elseif($sender !== null){
-                    $sender->sendMessage(TF::YELLOW . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::YELLOW . "is already activated");
-                }
-            }elseif($sender !== null){
-                $sender->sendMessage(TF::RED . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::RED . "exists but is not enabled");
-            }
-        }elseif($sender !== null){
-            $sender->sendMessage(TF::RED . "The beacon specified doesn't exist");
-        }
-        return;
-    }
-    
-    protected function setBeaconConfig(CommandSender $sender, array $args): void{
-        $id = $args[1];
-        $type = $args[2];
-        $setting = $args[3];
-        if(in_array($id, array_keys($this->beaconList))){
-            switch($type){
-                case "speed":
-                case "delay":
-                    if($this->internalData[$id]["Paused"] === true){
-                        $sender->sendMessage(TF::YELLOW . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::YELLOW . " is currently paused. Resume it with " . TF::GREEN . "/beacon resume $id");
-                        break;
-                    }
-                    if($this->internalData[$id]["Activated"] === false){
-                        $sender->sendMessage(TF::YELLOW . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::YELLOW . " is currently deactivated. Activate it with " . TF::GREEN . "/beacon show $id");
-                        break;
-                    }
-                    if(ctype_digit($setting)){
-                        $this->config->setNested("Beacons." . $id . ".Delay", intval($setting));
-                        $this->config->save();
-                        $this->reloadBeacons();
-                        $sender->sendMessage(TF::GREEN . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::GREEN . "delay successfully updated to " . TF::LIGHT_PURPLE . $setting);
-                    }else{
-                        $sender->sendMessage(TF::RED . "Beacon delay setting must be an integer");
-                    }
-                    break;
-                case "colors":
-                    if($this->internalData[$id]["Paused"] === true){
-                        $sender->sendMessage(TF::YELLOW . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::YELLOW . " is currently paused. Resume it with " . TF::GREEN . "/beacon resume $id");
-                        break;
-                    }
-                    if($this->internalData[$id]["Activated"] === false){
-                        $sender->sendMessage(TF::YELLOW . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::YELLOW . " is currently deactivated. Activate it with " . TF::GREEN . "/beacon show $id");
-                        break;
-                    }
-                    $colors = [];
-                    array_push($colors, $setting);
-                    str_replace(" ", "", $setting);
-                    if(strpos($setting, ",") !== false){
-                        $colors = [];
-                        if(count($args) > 4){
-                            $sender->sendMessage(TF::RED . "Beacon colors must be separated by commas");
-                            return;
-                        }
-                        $values = explode(",", $setting);
-                        foreach($values as $name){
-                            if(!is_string($name) || !self::checkColor($name)){
-                                $sender->sendMessage(TF::RED . $name . " is not a valid beacon color");
-                                return;
-                            }
-                            array_push($colors, $name);
-                        }
-                    }elseif(!is_string($setting) || !self::checkColor($setting)){
-                        $sender->sendMessage(TF::RED . $setting . " is not a valid beacon color");
-                        return;
-                    }
-                    $this->config->setNested("Beacons." . $id . ".Colors", $colors);
-                    $this->config->save();
-                    $this->reloadBeacons();
-                    if(is_array($colors)){
-                        $colors = (implode(", ", $colors));
-                    }
-                    $sender->sendMessage(TF::GREEN . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::GREEN . "colors successfully updated to " . TF::LIGHT_PURPLE . $colors);
-                    break;
-                default:
-                    $this->sendUsage($sender, "set");
-            }
-        }else{
-            $sender->sendMessage(TF::RED . "The beacon specified doesn't exist");
-        }
-        return;
-    }
-    
-    private function reloadBeacons(CommandSender $sender = null): void{
-        $this->config->save();
-        $this->config = new Config($this->getDataFolder() . "config.yml", Config::YAML);
-        $this->config->getAll();
-        foreach(array_keys($this->validBeacons) as $id){
-            foreach($this->internalData[$id]["TaskIDs"] as $taskID){
-                $this->internalData[$id]["TaskIDs"] = [];
-                $this->getScheduler()->cancelTask($taskID);
-            }
-        }
-        $this->validBeacons = [];
-        $this->beaconList = $this->config->get("Beacons");
-        $checkedBeacons = $this->checkBeacons($this->beaconList);
-        $this->startAllBeacons($checkedBeacons);
-        if($sender !== null){
-            $sender->sendMessage(TF::GREEN . "All beacons have been reloaded, reactivated, and resumed");
-        }
-        return;
-    }
-    
-    private function listBeacons(CommandSender $sender, string $mode): void{
-        if($mode === "all" || !($sender instanceof Player)){
-            if($this->validBeacons === [] || count($this->validBeacons) < 1){
-                if($sender instanceof Player){
-                    $sender->sendMessage(TF::YELLOW . "There are no beacons on the server yet, create one with " . TF::GREEN . "/beacon new");
-                    return;
-                }else{
-                    $sender->sendMessage(TF::YELLOW . "There are no beacons on the server to list");
-                    return;
-                }
-            }
-            $sender->sendMessage(TF::GRAY . "---" . TF::GOLD . " All Beacons " . TF::GRAY . "---");
-            foreach($this->validBeacons as $id => $data){
-                $coords = $data["Coords"];
-                $sender->sendMessage(TF::GREEN . "Beacon " . TF::BLUE . $id . TF::GREEN . " @ " . TF::YELLOW . "(" . (int)$coords[0] . ", " . (int)$coords[1] . ", " . (int)$coords[2] . ")" . TF::GREEN . " on " . TF::LIGHT_PURPLE . $data["Level"]);
-            }
-            $sender->sendMessage(TF::GRAY . "-------------------");
-        }elseif($mode === "world"){
-            $level = $sender->getLevel()->getName();
-            $beaconsFound = 0;
-            foreach($this->validBeacons as $id => $data){
-                if($data["Level"] === $level){
-                    $beaconsFound++;
-                }
-            }
-            if($beaconsFound < 1){
-                $sender->sendMessage(TF::YELLOW . "There are no beacons on level " . $level . " yet, create one with " . TF::GREEN . "/beacon new");
-                return;
-            }
-            $sender->sendMessage(TF::GRAY . "--- " . TF::GOLD . $level . " Beacons " . TF::GRAY . "---");
-            foreach($this->validBeacons as $id => $data){
-                if($data["Level"] === $level){
-                    $coords = $data["Coords"];
-                    $sender->sendMessage(TF::GREEN . "Beacon " . TF::BLUE . $id . TF::GREEN . " @ " . TF::YELLOW . "(" . (int)$coords[0] . ", " . (int)$coords[1] . ", " . (int)$coords[2] . ")");
-                    $beaconsFound++;
-                }
-            }
-            $sender->sendMessage(TF::GRAY . "-------------------");
-        }else{
-            $this->sendUsage($sender, "list");
-        }
-        return;
-    }
-    
-    private function sendUsage(CommandSender $sender, string $subcommand): void{
-        $sender->sendMessage(TF::RED . "Usage: " . self::$usages[$subcommand]);
-    }
-    
-    private function sendHelp(CommandSender $sender): void{
-        $sender->sendMessage(TF::GRAY . "---" . TF::GOLD . " RGBeacon Commands " . TF::GRAY . "---");
-        $sender->sendMessage(TF::YELLOW . "/beacon help [colors] → " . TF::BLUE . "View help page [view available colors]");
-        $sender->sendMessage(TF::YELLOW . "/beacon new → " . TF::BLUE . "Creates a new beacon under the player");
-        $sender->sendMessage(TF::YELLOW . "/beacon remove <id> → " . TF::BLUE . "Removes a selected beacon from the world");
-        $sender->sendMessage(TF::YELLOW . "/beacon pause <id> → " . TF::BLUE . "Pause a beacon's color cycle");
-        $sender->sendMessage(TF::YELLOW . "/beacon resume <id> → " . TF::BLUE . "Resume a beacon's color cycle if it is currently paused");
-        $sender->sendMessage(TF::YELLOW . "/beacon hide <id> → " . TF::BLUE . "Temporarily disables a beacon's beam");
-        $sender->sendMessage(TF::YELLOW . "/beacon show <id> → " . TF::BLUE . "Enables a beacon's beam if it's currently hidden");
-        $sender->sendMessage(TF::YELLOW . "/beacon set <id> <setting> <ticks|colors> → " . TF::BLUE . "Set the delay or color order of a beacon");
-        $sender->sendMessage(TF::YELLOW . "/beacon reload → " . TF::BLUE . "Reload the plugin's config and reset all beacons");
-        $sender->sendMessage(TF::YELLOW . "/beacon list <world|all> → " . TF::BLUE . "List all beacons or just ones in the current world");
-        $sender->sendMessage(TF::GRAY . "-------------------");
-        return;
-    }
-    
-    public function sendColorHelp(CommandSender $sender): void{
-        $colorString = implode(", ", self::$colors);
-        $sender->sendMessage(TF::BLUE . "Beacon colors: " . TF::GREEN . $colorString);
-        return;
-    }
-    
-    # This is currently a (shitty) hack to get beacons to show when a chunk unloads then loads again
-    
     private function refreshBeacons(int $delay): void{
         $this->getScheduler()->scheduleRepeatingTask(new UpdateBeaconTask($this), $delay);
-    }
-    
-    /*
-    public function onChunkLoad(ChunkLoadEvent $event) : void{
-        $eChunk = $event->getChunk();
-        $eLevel = $event->getLevel();
-        foreach($this->validBeacons as $id => $data){
-            $bLevel = $this->getServer()->getLevelByName($data["Level"]);
-            if($eLevel->getName() === $bLevel->getName()){
-                $coords = $data["Coords"];
-                $block = $bLevel->getBlockAt($coords[0], $coords[1], $coords[2]);
-                if($block->getX() >> 4 == $eChunk->getX() && $block->getZ() >> 4 == $eChunk->getZ()){
-                    $this->getScheduler()->scheduleDelayedTask(new UpdateBeaconTask($this, $id, $data), 200);
-                }
-            }
-        }
-        return;
-    }
-    */
-    
-    private function hasPerms(CommandSender $sender): bool{
-        if($sender->isOp()){
-            return true;
-        }
-        $perms = $sender->getEffectivePermissions();
-        foreach($perms as $perm){
-            $permString = $perm->getPermission();
-            if(substr($permString, 0, 16) === "rgbeacon.command"){
-                return true;
-            }
-        }
-        return false;
-    }
-    
-    private function noPermission(CommandSender $sender): void{
-        $sender->sendMessage(TF::RED . "You do not have permission to use this command");
-        return;
     }
     
     public function onCommand(CommandSender $sender, Command $command, string $label, array $args): bool{
@@ -810,7 +424,10 @@ class RGBeacon extends PluginBase implements Listener {
                                     $this->sendColorHelp($sender);
                                     break;
                                 }
+                            }else{
+                                $this->sendHelp($sender);
                             }
+                            break;
                         default:
                             $this->sendHelp($sender);
                     }
@@ -822,5 +439,404 @@ class RGBeacon extends PluginBase implements Listener {
             }
         }
         return true;
+    }
+    
+    private function hasPerms(CommandSender $sender): bool{
+        if($sender->isOp()){
+            return true;
+        }
+        $perms = $sender->getEffectivePermissions();
+        foreach($perms as $perm){
+            $permString = $perm->getPermission();
+            if(substr($permString, 0, 16) === "rgbeacon.command"){
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    private function createBeacon(Player $player): void{
+        $x = $player->getX();
+        $y = $player->getY();
+        $z = $player->getZ();
+        $level = $player->getLevel();
+        if(!in_array($level->getName(), $this->levels)){
+            $player->sendMessage(TF::RED . "Beacons cannot be created on level " . $level->getName());
+            return;
+        }
+        foreach($this->validBeacons as $id => $data){
+            if($level->getName() == $data["Level"]){
+                $coords = $data["Coords"];
+                $dBlock = $level->getBlockAt($x, $y, $z);
+                $eBlock = $level->getBlockAt($coords[0], $coords[1], $coords[2]);
+                if($dBlock->x == $eBlock->x && $dBlock->y == $eBlock->y && $dBlock->z == $eBlock->z){
+                    $player->sendMessage(TF::RED . "Beacon (ID " . $id . ") already exists at (" . (int)$x . ", " . (int)$y . ", " . (int)$z . ")");
+                    return;
+                }
+            }
+        }
+        $tBlock = $level->getBlockAt($x, $y - 1, $z);
+        $bBlock = $level->getBlockAt($x, $y - 2, $z);
+        $id = sizeof($this->validBeacons) === 0 ? 1 : max(array_keys($this->validBeacons)) + 1;
+        while(array_key_exists($id, $this->validBeacons)){
+            $id++;
+        }
+        $pos = $bBlock->getSide(0);
+        $baseBlocks = [];
+        for($blockX = $pos->x - 1; $blockX <= $pos->x + 1; $blockX++){
+            for($blockZ = $pos->z - 1; $blockZ <= $pos->z + 1; $blockZ++){
+                $baseBlock = $level->getBlockAt($blockX, $pos->y, $blockZ);
+                $level->setBlock($baseBlock, BlockFactory::get(Block::IRON_BLOCK), true, false);
+                array_push($baseBlocks, $baseBlock->getId() . ":" . $baseBlock->getDamage());
+            }
+        }
+        $data = ["Level" => $level->getName(), "Coords" => [$x, $y, $z], "Delay" => $this->defaults["delay"], "Replaced" => ["Glass" => $tBlock->getId() . ":" . $tBlock->getDamage(), "Beacon" => $bBlock->getId() . ":" . $bBlock->getDamage()], "Base" => $baseBlocks, "Colors" => $this->defaults["colors"]];
+        if($this->colorType === "block"){
+            $level->setBlock($tBlock, BlockFactory::get(Block::STAINED_GLASS), true, true);
+        }else{
+            $level->setBlock($tBlock, BlockFactory::get(Block::STAINED_GLASS_PANE), true, true);
+        }
+        $this->startBeacon($id, $data);
+        $player->sendMessage(TF::GREEN . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::GREEN . "created at " . TF::YELLOW . "(" . (int)$x . ", " . (int)$y . ", " . (int)$z . ")");
+        return;
+    }
+    
+    private function noPermission(CommandSender $sender): void{
+        $sender->sendMessage(TF::RED . "You do not have permission to use this command");
+        return;
+    }
+    
+    private function removeBeacon(CommandSender $sender, int $id): void{
+        if(in_array($id, array_keys($this->beaconList))){
+            if(in_array($id, array_keys($this->validBeacons))){
+                foreach($this->internalData[$id]["TaskIDs"] as $taskID){
+                    $this->internalData[$id]["TaskIDs"] = [];
+                    $this->getScheduler()->cancelTask($taskID);
+                }
+                $data = $this->validBeacons[$id];
+                unset($this->validBeacons[$id]);
+                unset($this->beaconList[$id]);
+                $level = $this->getServer()->getLevelByName($data["Level"]);
+                $coords = $data["Coords"];
+                $tBlock = $level->getBlockAt($coords[0], $coords[1] - 1, $coords[2]);
+                $bBlock = $level->getBlockAt($coords[0], $coords[1] - 2, $coords[2]);
+                $values = explode(":", $data["Replaced"]["Glass"]);
+                $level->setBlock($tBlock, BlockFactory::get((int)$values[0], isset($values[1]) ? (int)$values[1] : 0));
+                $values = explode(":", $data["Replaced"]["Beacon"]);
+                $level->setBlock($bBlock, BlockFactory::get((int)$values[0], isset($values[1]) ? (int)$values[1] : 0));
+                $pos = $bBlock->getSide(0);
+                $i = 0;
+                for($blockX = $pos->x - 1; $blockX <= $pos->x + 1; $blockX++){
+                    for($blockZ = $pos->z - 1; $blockZ <= $pos->z + 1; $blockZ++){
+                        $replacement = $data["Base"][$i];
+                        $i++;
+                        $baseBlock = $level->getBlockAt($blockX, $pos->y, $blockZ);
+                        $values = explode(":", $replacement);
+                        $level->setBlock($baseBlock, Block::get((int)$values[0], isset($values[1]) ? (int)$values[1] : 0));
+                    }
+                }
+                $this->config->removeNested("Beacons." . $id);
+                $this->config->save();
+                $sender->sendMessage(TF::GREEN . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::GREEN . "removed successfully");
+                return;
+            }else{
+                $sender->sendMessage(TF::RED . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::RED . "is invalid and cannot be removed");
+            }
+        }else{
+            $sender->sendMessage(TF::RED . "The beacon specified doesn't exist");
+            return;
+        }
+    }
+    
+    private function sendUsage(CommandSender $sender, string $subcommand): void{
+        $sender->sendMessage(TF::RED . "Usage: " . self::$usages[$subcommand]);
+    }
+    
+    private function pauseBeacon(CommandSender $sender, int $id): void{
+        if(in_array($id, array_keys($this->beaconList))){
+            if(in_array($id, array_keys($this->validBeacons))){
+                if($this->internalData[$id]["Paused"] === false){
+                    $this->internalData[$id]["Paused"] = true;
+                    foreach($this->internalData[$id]["TaskIDs"] as $taskID){
+                        $this->internalData[$id]["TaskIDs"] = [];
+                        $this->getScheduler()->cancelTask($taskID);
+                    }
+                    $sender->sendMessage(TF::GREEN . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::GREEN . "paused successfully");
+                }else{
+                    $sender->sendMessage(TF::YELLOW . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::YELLOW . "is already paused");
+                }
+            }else{
+                $sender->sendMessage(TF::RED . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::RED . "exists but is not enabled");
+            }
+        }else{
+            $sender->sendMessage(TF::RED . "The beacon specified doesn't exist");
+        }
+        return;
+    }
+    
+    private function resumeBeacon(CommandSender $sender, int $id): void{
+        if(in_array($id, array_keys($this->beaconList))){
+            if(in_array($id, array_keys($this->validBeacons))){
+                if($this->internalData[$id]["Paused"] === true){
+                    $this->internalData[$id]["Paused"] = false;
+                    if($this->internalData[$id]["Activated"] === false){
+                        $sender->sendMessage(TF::YELLOW . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::YELLOW . " was re-activated because it was deactivatd before resuming");
+                    }
+                    $this->startBeacon($id, $this->validBeacons[$id]);
+                    $sender->sendMessage(TF::GREEN . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::GREEN . "resumed successfully");
+                }else{
+                    $sender->sendMessage(TF::YELLOW . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::YELLOW . "is not currently paused");
+                }
+            }else{
+                $sender->sendMessage(TF::RED . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::RED . "exists but is not enabled");
+            }
+        }else{
+            $sender->sendMessage(TF::RED . "The beacon specified doesn't exist");
+        }
+        return;
+    }
+    
+    /**
+     * @param int $id
+     * @param CommandSender|null $sender
+     */
+    public function hideBeacon(int $id, CommandSender $sender = null): void{
+        if(in_array($id, array_keys($this->beaconList))){
+            if(in_array($id, array_keys($this->validBeacons))){
+                if($this->internalData[$id]["Activated"] === true){
+                    $this->internalData[$id]["Activated"] = false;
+                    $data = $this->validBeacons[$id];
+                    $coords = $data["Coords"];
+                    $level = $this->getServer()->getLevelByName($data["Level"]);
+                    $block = $level->getBlockAt($coords[0], $coords[1] - 2, $coords[2]);
+                    $level->setBlock($block, BlockFactory::get(Block::IRON_BLOCK), true, true);
+                    if($sender === null){
+                        return;
+                    }
+                    $sender->sendMessage(TF::GREEN . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::GREEN . "deactivated successfully");
+                }elseif($sender !== null){
+                    $sender->sendMessage(TF::YELLOW . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::YELLOW . "is already deactivated");
+                }
+            }elseif($sender !== null){
+                $sender->sendMessage(TF::RED . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::RED . "exists but is not enabled");
+            }
+        }elseif($sender !== null){
+            $sender->sendMessage(TF::RED . "The beacon specified doesn't exist");
+        }
+        return;
+    }
+    
+    /**
+     * @param int $id
+     * @param CommandSender|null $sender
+     */
+    public function showBeacon(int $id, CommandSender $sender = null): void{
+        if(in_array($id, array_keys($this->beaconList))){
+            if(in_array($id, array_keys($this->validBeacons))){
+                if($this->internalData[$id]["Activated"] === false){
+                    $this->internalData[$id]["Activated"] = true;
+                    $data = $this->validBeacons[$id];
+                    $coords = $data["Coords"];
+                    $level = $this->getServer()->getLevelByName($data["Level"]);
+                    $level->loadChunk($coords[0], $coords[2]);
+                    $block = $level->getBlockAt($coords[0], $coords[1] - 2, $coords[2]);
+                    $level->setBlock($block, BlockFactory::get(Block::BEACON), true, true);
+                    if($sender === null){
+                        return;
+                    }
+                    $sender->sendMessage(TF::GREEN . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::GREEN . "activated successfully");
+                }elseif($sender !== null){
+                    $sender->sendMessage(TF::YELLOW . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::YELLOW . "is already activated");
+                }
+            }elseif($sender !== null){
+                $sender->sendMessage(TF::RED . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::RED . "exists but is not enabled");
+            }
+        }elseif($sender !== null){
+            $sender->sendMessage(TF::RED . "The beacon specified doesn't exist");
+        }
+        return;
+    }
+    
+    /**
+     * @param CommandSender $sender
+     * @param array $args
+     */
+    protected function setBeaconConfig(CommandSender $sender, array $args): void{
+        $id = $args[1];
+        $type = $args[2];
+        $setting = $args[3];
+        if(in_array($id, array_keys($this->beaconList))){
+            switch($type){
+                case "speed":
+                case "delay":
+                    if($this->checkPaused($sender, $id)) break;
+                    if(ctype_digit($setting)){
+                        $this->config->setNested("Beacons." . $id . ".Delay", intval($setting));
+                        $this->config->save();
+                        $this->reloadBeacons();
+                        $sender->sendMessage(TF::GREEN . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::GREEN . "delay successfully updated to " . TF::LIGHT_PURPLE . $setting);
+                    }else{
+                        $sender->sendMessage(TF::RED . "Beacon delay setting must be an integer");
+                    }
+                    break;
+                case "colors":
+                    if($this->checkPaused($sender, $id)) break;
+                    $colors = [];
+                    array_push($colors, $setting);
+                    str_replace(" ", "", $setting);
+                    if(strpos($setting, ",") !== false){
+                        $colors = [];
+                        if(count($args) > 4){
+                            $sender->sendMessage(TF::RED . "Beacon colors must be separated by commas");
+                            return;
+                        }
+                        $values = explode(",", $setting);
+                        foreach($values as $name){
+                            if(!is_string($name) || !self::checkColor($name)){
+                                $sender->sendMessage(TF::RED . $name . " is not a valid beacon color");
+                                return;
+                            }
+                            array_push($colors, $name);
+                        }
+                    }elseif(!is_string($setting) || !self::checkColor($setting)){
+                        $sender->sendMessage(TF::RED . $setting . " is not a valid beacon color");
+                        return;
+                    }
+                    $this->config->setNested("Beacons." . $id . ".Colors", $colors);
+                    $this->config->save();
+                    $this->reloadBeacons();
+                    if(is_array($colors)){
+                        $colors = (implode(", ", $colors));
+                    }
+                    $sender->sendMessage(TF::GREEN . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::GREEN . "colors successfully updated to " . TF::LIGHT_PURPLE . $colors);
+                    break;
+                default:
+                    $this->sendUsage($sender, "set");
+            }
+        }else{
+            $sender->sendMessage(TF::RED . "The beacon specified doesn't exist");
+        }
+        return;
+    }
+    
+    private function checkPaused(CommandSender $sender, int $id): bool{
+        if($this->internalData[$id]["Paused"] === true){
+            $sender->sendMessage(TF::YELLOW . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::YELLOW . " is currently paused. Resume it with " . TF::GREEN . "/beacon resume $id");
+            return true;
+        }
+        if($this->internalData[$id]["Activated"] === false){
+            $sender->sendMessage(TF::YELLOW . "Beacon" . TF::BLUE . " (ID " . $id . ") " . TF::YELLOW . " is currently deactivated. Activate it with " . TF::GREEN . "/beacon show $id");
+            return true;
+        }
+        return false;
+    }
+    
+    # This is currently a (shitty) hack to get beacons to show when a chunk unloads then loads again
+    
+    private function reloadBeacons(CommandSender $sender = null): void{
+        $this->config->save();
+        $this->config = new Config($this->getDataFolder() . "config.yml", Config::YAML);
+        $this->config->getAll();
+        foreach(array_keys($this->validBeacons) as $id){
+            foreach($this->internalData[$id]["TaskIDs"] as $taskID){
+                $this->internalData[$id]["TaskIDs"] = [];
+                $this->getScheduler()->cancelTask($taskID);
+            }
+        }
+        $this->validBeacons = [];
+        $this->beaconList = $this->config->get("Beacons");
+        $checkedBeacons = $this->checkBeacons($this->beaconList);
+        $this->startAllBeacons($checkedBeacons);
+        if($sender !== null){
+            $sender->sendMessage(TF::GREEN . "All beacons have been reloaded, reactivated, and resumed");
+        }
+        return;
+    }
+    
+    /*
+    public function onChunkLoad(ChunkLoadEvent $event) : void{
+        $eChunk = $event->getChunk();
+        $eLevel = $event->getLevel();
+        foreach($this->validBeacons as $id => $data){
+            $bLevel = $this->getServer()->getLevelByName($data["Level"]);
+            if($eLevel->getName() === $bLevel->getName()){
+                $coords = $data["Coords"];
+                $block = $bLevel->getBlockAt($coords[0], $coords[1], $coords[2]);
+                if($block->getX() >> 4 == $eChunk->getX() && $block->getZ() >> 4 == $eChunk->getZ()){
+                    $this->getScheduler()->scheduleDelayedTask(new UpdateBeaconTask($this, $id, $data), 200);
+                }
+            }
+        }
+        return;
+    }
+    */
+    
+    private function listBeacons(CommandSender $sender, string $mode): void{
+        if($mode === "all" || !($sender instanceof Player)){
+            if($this->validBeacons === [] || count($this->validBeacons) < 1){
+                if($sender instanceof Player){
+                    $sender->sendMessage(TF::YELLOW . "There are no beacons on the server yet, create one with " . TF::GREEN . "/beacon new");
+                    return;
+                }else{
+                    $sender->sendMessage(TF::YELLOW . "There are no beacons on the server to list");
+                    return;
+                }
+            }
+            $sender->sendMessage(TF::GRAY . "---" . TF::GOLD . " All Beacons " . TF::GRAY . "---");
+            foreach($this->validBeacons as $id => $data){
+                $coords = $data["Coords"];
+                $sender->sendMessage(TF::GREEN . "Beacon " . TF::BLUE . $id . TF::GREEN . " @ " . TF::YELLOW . "(" . (int)$coords[0] . ", " . (int)$coords[1] . ", " . (int)$coords[2] . ")" . TF::GREEN . " on " . TF::LIGHT_PURPLE . $data["Level"]);
+            }
+            $sender->sendMessage(TF::GRAY . "-------------------");
+        }elseif($mode === "world"){
+            $level = $sender->getLevel()->getName();
+            $beaconsFound = 0;
+            foreach($this->validBeacons as $id => $data){
+                if($data["Level"] === $level){
+                    $beaconsFound++;
+                }
+            }
+            if($beaconsFound < 1){
+                $sender->sendMessage(TF::YELLOW . "There are no beacons on level " . $level . " yet, create one with " . TF::GREEN . "/beacon new");
+                return;
+            }
+            $sender->sendMessage(TF::GRAY . "--- " . TF::GOLD . $level . " Beacons " . TF::GRAY . "---");
+            foreach($this->validBeacons as $id => $data){
+                if($data["Level"] === $level){
+                    $coords = $data["Coords"];
+                    $sender->sendMessage(TF::GREEN . "Beacon " . TF::BLUE . $id . TF::GREEN . " @ " . TF::YELLOW . "(" . (int)$coords[0] . ", " . (int)$coords[1] . ", " . (int)$coords[2] . ")");
+                    $beaconsFound++;
+                }
+            }
+            $sender->sendMessage(TF::GRAY . "-------------------");
+        }else{
+            $this->sendUsage($sender, "list");
+        }
+        return;
+    }
+    
+    /**
+     * @param CommandSender $sender
+     */
+    public function sendColorHelp(CommandSender $sender): void{
+        $colorString = implode(", ", self::$colors);
+        $sender->sendMessage(TF::BLUE . "Beacon colors: " . TF::GREEN . $colorString);
+        return;
+    }
+    
+    private function sendHelp(CommandSender $sender): void{
+        $sender->sendMessage(TF::GRAY . "---" . TF::GOLD . " RGBeacon Commands " . TF::GRAY . "---");
+        $sender->sendMessage(TF::YELLOW . "/beacon help [colors] → " . TF::BLUE . "View help page [view available colors]");
+        $sender->sendMessage(TF::YELLOW . "/beacon new → " . TF::BLUE . "Creates a new beacon under the player");
+        $sender->sendMessage(TF::YELLOW . "/beacon remove <id> → " . TF::BLUE . "Removes a selected beacon from the world");
+        $sender->sendMessage(TF::YELLOW . "/beacon pause <id> → " . TF::BLUE . "Pause a beacon's color cycle");
+        $sender->sendMessage(TF::YELLOW . "/beacon resume <id> → " . TF::BLUE . "Resume a beacon's color cycle if it is currently paused");
+        $sender->sendMessage(TF::YELLOW . "/beacon hide <id> → " . TF::BLUE . "Temporarily disables a beacon's beam");
+        $sender->sendMessage(TF::YELLOW . "/beacon show <id> → " . TF::BLUE . "Enables a beacon's beam if it's currently hidden");
+        $sender->sendMessage(TF::YELLOW . "/beacon set <id> <setting> <ticks|colors> → " . TF::BLUE . "Set the delay or color order of a beacon");
+        $sender->sendMessage(TF::YELLOW . "/beacon reload → " . TF::BLUE . "Reload the plugin's config and reset all beacons");
+        $sender->sendMessage(TF::YELLOW . "/beacon list <world|all> → " . TF::BLUE . "List all beacons or just ones in the current world");
+        $sender->sendMessage(TF::GRAY . "-------------------");
+        return;
     }
 }

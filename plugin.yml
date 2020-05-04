@@ -10,6 +10,7 @@ commands:
     permission: rgbeacon.info
   beacon:
     description: Create, remove, and manage RGBeacons
+    permission: rgbeacon.command
 permissions:
   rgbeacon.info:
     description: Get info on the plugin
