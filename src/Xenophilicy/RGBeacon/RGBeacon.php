@@ -201,7 +201,7 @@ class RGBeacon extends PluginBase implements Listener {
             }
             $level = $this->getServer()->getLevelByName($data["Level"])->getName();
             if(($this->listMode == "wl" && !in_array($level, $this->levels)) || ($this->listMode == "bl" && in_array($level, $this->levels))){
-                $this->getLogger()->warning("Beacon ID " . $id . " cannot be started on level " . $level . " due to whitelist/blacklist, it will be removed from the config!");
+                $this->getLogger()->warning("Beacon ID " . $id . " cannot be started on level " . $level . " due to whitelist/blacklist!");
                 continue;
             }
             if(!is_array($data["Coords"]) || count($data["Coords"]) < 3){
@@ -460,7 +460,7 @@ class RGBeacon extends PluginBase implements Listener {
         $y = $player->getY();
         $z = $player->getZ();
         $level = $player->getLevel();
-        if(($this->listMode == "wl" && !in_array($level, $this->levels)) || ($this->listMode == "bl" && in_array($level, $this->levels))){
+        if(($this->listMode == "wl" && !in_array($level->getName(), $this->levels)) || ($this->listMode == "bl" && in_array($level->getName(), $this->levels))){
             $player->sendMessage(TF::RED . "Beacons cannot be created on level " . $level->getName());
             return;
         }
