@@ -3,7 +3,7 @@
 [![HitCount](http://hits.dwyl.io/Xenophilicy/RGBeacon.svg)](http://hits.dwyl.io/Xenophilicy/RGBeacon)
 [![Discord Chat](https://img.shields.io/discord/490677165289897995.svg)](https://discord.gg/hNVehXe)
 
-# [![RGBeacon](https://file.xenoservers.net/Resources/GitHub-Resources/rgbeacon/rgbeacon.gif)]()
+# [![RGBeacon](http://file.xenoservers.net/Resources/GitHub-Resources/rgbeacon/rgbeacon.gif)]()
 
 ## Information
 This plugin allows you to spawn in beacons that change colors according to what you throw in the plugin's config! You are able to change the color of the beacon, order of colors, and speed of the colors in the *config.yml* file! To spawn a new RGBeacon, simple execute the command `/beacon new` and the plugin will spawn a new beacon under your feet! Beacons can be removed with their corresponding ID that can be found when both creating the beacon and looking at the beacon list in the config file!

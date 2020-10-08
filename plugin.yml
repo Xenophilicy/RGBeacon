@@ -21,28 +21,19 @@ permissions:
     children:
       rgbeacon.command.new:
         description: Create new beacons
-        default: op
       rgbeacon.command.remove:
         description: Remove beacons
-        default: op
       rgbeacon.command.pause:
         description: Pause active beacons
-        default: op
       rgbeacon.command.resume:
         description: Resume paused beacons
-        default: op
       rgbeacon.command.hide:
         description: Hide visible beacons
-        default: op
       rgbeacon.command.show:
         description: Show disabled beacons
-        default: op
       rgbeacon.command.set:
         description: Set values on beacons
-        default: op
       rgbeacon.command.reload:
         description: Reload beacons config
-        default: op
       rgbeacon.command.list:
         description: List all beacons
-        default: op
